@@ -12,23 +12,24 @@ app.set('views', `${__dirname}/views`);
 app.set('view engine', 'ejs');
 app.use(partials());
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.urlencoded({
+  extended: true
+}));
 app.use(express.static(path.join(__dirname, '../public')));
 
 
+app.use(require('./middleware/cookieParser'));
+app.use(Auth.createSession);
 
-app.get('/', 
-(req, res) => {
+app.get('/', Auth.verifySession, (req, res) => {
   res.render('index');
 });
 
-app.get('/create', 
-(req, res) => {
+app.get('/create', Auth.verifySession, (req, res) => {
   res.render('index');
 });
 
-app.get('/links', 
-(req, res, next) => {
+app.get('/links', Auth.verifySession, (req, res, next) => {
   models.Links.getAll()
     .then(links => {
       res.status(200).send(links);
@@ -38,15 +39,16 @@ app.get('/links',
     });
 });
 
-app.post('/links', 
-(req, res, next) => {
+app.post('/links', Auth.verifySession, (req, res, next) => {
   var url = req.body.url;
   if (!models.Links.isValidUrl(url)) {
     // send back a 404 if link is not valid
     return res.sendStatus(404);
   }
 
-  return models.Links.get({ url })
+  return models.Links.get({
+      url
+    })
     .then(link => {
       if (link) {
         throw link;
@@ -61,7 +63,9 @@ app.post('/links',
       });
     })
     .then(results => {
-      return models.Links.get({ id: results.insertId });
+      return models.Links.get({
+        id: results.insertId
+      });
     })
     .then(link => {
       throw link;
@@ -79,6 +83,94 @@ app.post('/links',
 /************************************************************/
 
 
+app.get('/login', (req, res) => {
+  res.render('login');
+});
+
+app.post('/login', (req, res, next) => {
+  var username = req.body.username;
+  var password = req.body.password;
+
+  return models.Users.get({
+      username
+    })
+    .then(user => {
+
+      if (!user || !models.Users.compare(password, user.password, user.salt)) {
+        // user doesn't exist or the password doesn't match
+        throw new Error('Username and password do not match');
+      }
+
+      return models.Sessions.update({
+        hash: req.session.hash
+      }, {
+        userId: user.id
+      });
+    })
+    .then(() => {
+      res.redirect('/');
+    })
+    .error(error => {
+      res.status(500).send(error);
+    })
+    .catch(() => {
+      res.redirect('/login');
+    });
+});
+
+app.get('/logout', (req, res, next) => {
+
+  return models.Sessions.delete({
+      hash: req.cookies.shortlyid
+    })
+    .then(() => {
+      res.clearCookie('shortlyid');
+      res.redirect('/login');
+    })
+    .error(error => {
+      res.status(500).send(error);
+    });
+});
+
+app.get('/signup', (req, res) => {
+  res.render('signup');
+});
+
+app.post('/signup', (req, res, next) => {
+  var username = req.body.username;
+  var password = req.body.password;
+
+  return models.Users.get({
+      username
+    })
+    .then(user => {
+      if (user) {
+        // user already exists; throw user to catch and redirect
+        throw user;
+      }
+
+      return models.Users.create({
+        username,
+        password
+      });
+    })
+    .then(results => {
+      return models.Sessions.update({
+        hash: req.session.hash
+      }, {
+        userId: results.insertId
+      });
+    })
+    .then(() => {
+      res.redirect('/');
+    })
+    .error(error => {
+      res.status(500).send(error);
+    })
+    .catch(user => {
+      res.redirect('/signup');
+    });
+});
 
 /************************************************************/
 // Handle the code parameter route last - if all other routes fail
@@ -88,18 +180,26 @@ app.post('/links',
 
 app.get('/:code', (req, res, next) => {
 
-  return models.Links.get({ code: req.params.code })
+  return models.Links.get({
+      code: req.params.code
+    })
     .tap(link => {
 
       if (!link) {
         throw new Error('Link does not exist');
       }
-      return models.Clicks.create({ linkId: link.id });
+      return models.Clicks.create({
+        linkId: link.id
+      });
     })
     .tap(link => {
-      return models.Links.update(link, { visits: link.visits + 1 });
+      return models.Links.update(link, {
+        visits: link.visits + 1
+      });
     })
-    .then(({ url }) => {
+    .then(({
+      url
+    }) => {
       res.redirect(url);
     })
     .error(error => {

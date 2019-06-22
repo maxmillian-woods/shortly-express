@@ -10,7 +10,10 @@ const parseData = options => {
     parsed.string.push(`${key} = ?`);
     parsed.values.push(value);
     return parsed;
-  }, { string: [], values: [] });
+  }, {
+    string: [],
+    values: []
+  });
 };
 
 /**
@@ -52,8 +55,13 @@ class Model {
    */
   get(options) {
     let parsedOptions = parseData(options);
+    //console.log(JSON.stringify(parsedOptions) + ' parsedOptions');
+    //console.log(this.tablename + ' tablename');
     let queryString = `SELECT * FROM ${this.tablename} WHERE ${parsedOptions.string.join(' AND ')} LIMIT 1`;
-    return executeQuery(queryString, parsedOptions.values).then(results => results[0]);
+    //console.log(queryString + ' queryString');
+    return executeQuery(queryString, parsedOptions.values).then(results => {
+      return results[0];
+    });
   }
 
   /**
@@ -67,6 +75,10 @@ class Model {
    */
   create(options) {
     let queryString = `INSERT INTO ${this.tablename} SET ?`;
+    //console.log('-----------------');
+    // console.log(queryString + ' queryString in create.');
+    // console.log(JSON.stringify(options) + ' options in create.')
+    //console.log('-----------------');
     return executeQuery(queryString, options);
   }
 

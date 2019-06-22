@@ -38,7 +38,9 @@ class Sessions extends Model {
         if (!session || !session.userId) {
           return session;
         }
-        return Users.get({ id: session.userId }).then(user => {
+        return Users.get({
+          id: session.userId
+        }).then(user => {
           session.user = user;
           return session;
         });
@@ -53,7 +55,9 @@ class Sessions extends Model {
   create() {
     let data = utils.createRandom32String();
     let hash = utils.createHash(data);
-    return super.create.call(this, { hash });
+    return super.create.call(this, {
+      hash
+    });
   }
 }
 
